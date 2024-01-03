@@ -84,7 +84,8 @@ def chat_completion(
     all_messages = [
         ChatMessage(content=m.content, role=MessageRole(m.role)) for m in body.messages
     ]
-    if body.stream:
+    if body.stream and False:
+        print("Streaming response gonna blow up")
         completion_gen = service.stream_chat(
             messages=all_messages,
             use_context=body.use_context,
@@ -98,6 +99,8 @@ def chat_completion(
             media_type="text/event-stream",
         )
     else:
+        print("Not Streaming response should not blow up")
+
         completion = service.chat(
             messages=all_messages,
             use_context=body.use_context,

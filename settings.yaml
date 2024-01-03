@@ -33,11 +33,11 @@ ui:
     the answer, just state the answer is not in the context provided.
 
 llm:
-  mode: local
+  mode: huggingface
   # Should be matching the selected model
   max_new_tokens: 512
   context_window: 3900
-  tokenizer: mistralai/Mistral-7B-Instruct-v0.2
+  tokenizer: HuggingFaceH4/zephyr-7b-beta
 
 embedding:
   # Should be matching the value above in most cases
@@ -62,4 +62,8 @@ sagemaker:
 
 openai:
   api_key: ${OPENAI_API_KEY:}
+  model: gpt-3.5-turbo
+
+huggingface:
+  api_key: ${HUGGINGFACE_API_KEY:}
   model: gpt-3.5-turbo

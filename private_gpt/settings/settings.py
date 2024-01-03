@@ -81,7 +81,7 @@ class DataSettings(BaseModel):
 
 
 class LLMSettings(BaseModel):
-    mode: Literal["local", "openai", "openailike", "sagemaker", "mock"]
+    mode: Literal["local", "openai", "openailike", "sagemaker", "mock", "huggingface"]
     max_new_tokens: int = Field(
         256,
         description="The maximum number of token that the LLM is authorized to generate in one completion.",
@@ -166,6 +166,27 @@ class OpenAISettings(BaseModel):
         description="OpenAI Model to use. Example: 'gpt-4'.",
     )
 
+class HuggingFaceSettings(BaseModel):
+    api_base: str = Field(
+        None,
+        description="Base URL of HuggingFace API. Example: 'https://total-garbage'.",
+    )
+    api_key: str
+    model: str = Field(
+        "gpt-3.5-turbo",
+        description="Hugging Face Model to use. Example: 'gpt-4'.",
+    )
+    prompt_style: Literal["default", "llama2", "tag"] = Field(
+        "tag",
+        description=(
+            "The prompt style to use for the chat engine. "
+            "If `default` - use the default prompt style from the llama_index. It should look like `role: message`.\n"
+            "If `llama2` - use the llama2 prompt style from the llama_index. Based on `<s>`, `[INST]` and `<<SYS>>`.\n"
+            "If `tag` - use the `tag` prompt style. It should look like `<|role|>: message`. \n"
+            "`llama2` is the historic behaviour. `default` might work better with your custom models."
+        ),
+    )
+
 
 class UISettings(BaseModel):
     enabled: bool
@@ -240,6 +261,7 @@ class Settings(BaseModel):
     llm: LLMSettings
     embedding: EmbeddingSettings
     local: LocalSettings
+    huggingface: HuggingFaceSettings
     sagemaker: SagemakerSettings
     openai: OpenAISettings
     vectorstore: VectorstoreSettings

@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from injector import inject, singleton
 from llama_index import set_global_tokenizer
@@ -9,8 +10,14 @@ from transformers import AutoTokenizer  # type: ignore
 from private_gpt.components.llm.prompt_helper import get_prompt_style
 from private_gpt.paths import models_cache_path, models_path
 from private_gpt.settings.settings import Settings
+import os
+from langchain_community.llms import HuggingFaceTextGenInference
+from llama_index.llms import LangChainLLM
 
 logger = logging.getLogger(__name__)
+
+HF_TOKEN: Optional[str] = os.getenv("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")
+
 
 
 @singleton
@@ -78,5 +85,19 @@ class LLMComponent:
                     max_tokens=None,
                     api_version="",
                 )
+            case "huggingface":  
+                hf = HuggingFaceTextGenInference(
+                    inference_server_url="https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta",
+                    max_new_tokens=512,
+                    top_k=10,
+                    top_p=0.95,
+                    typical_p=0.95,
+                    temperature=0.01,
+                    repetition_penalty=1.03,
+                )
+                prompt_style = get_prompt_style(settings.huggingface.prompt_style)
+                self.llm = LangChainLLM(llm=hf, messages_to_prompt=prompt_style.messages_to_prompt,
+                    completion_to_prompt=prompt_style.completion_to_prompt,)
+                # self.llm = MockLLM()
             case "mock":
                 self.llm = MockLLM()
