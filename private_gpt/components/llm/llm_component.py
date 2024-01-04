@@ -4,7 +4,7 @@ from typing import Optional
 from injector import inject, singleton
 from llama_index import set_global_tokenizer
 from llama_index.llms import MockLLM
-from llama_index.llms.base import LLM
+from llama_index.llms import LLM
 from transformers import AutoTokenizer  # type: ignore
 
 from private_gpt.components.llm.prompt_helper import get_prompt_style
@@ -13,6 +13,8 @@ from private_gpt.settings.settings import Settings
 import os
 from langchain_community.llms import HuggingFaceTextGenInference
 from llama_index.llms import LangChainLLM
+from llama_index.llms import ChatMessage
+
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +97,16 @@ class LLMComponent:
                     temperature=0.01,
                     repetition_penalty=1.03,
                 )
-                prompt_style = get_prompt_style(settings.huggingface.prompt_style)
-                self.llm = LangChainLLM(llm=hf, messages_to_prompt=prompt_style.messages_to_prompt,
-                    completion_to_prompt=prompt_style.completion_to_prompt,)
+
+                def messages_to_prompt(messages: list[ChatMessage]) -> str:
+                    print("i'm in here")
+
+                    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceH4/zephyr-7b-beta")
+                    formated_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                    print(formated_prompt)
+                    return formated_prompt
+                self.llm = LangChainLLM(llm=hf, messages_to_prompt=messages_to_prompt)
+                # , messages_to_prompt=messages_to_prompt
                 # self.llm = MockLLM()
             case "mock":
                 self.llm = MockLLM()
