@@ -1,0 +1,294 @@
+{
+    "title": "Injecting Domain Knowledge in Language Models\nfor Task-Oriented Dialogue Systems",
+    "authors": "^{*}Denis Emelin^{1}, Daniele Bonadiman^{2},_{ *}Sawsan Alqahtani^{3,4}, Yi Zhang^{2}, and Saab Mansour^{2}",
+    "body": [
+        {
+            "section_title": "1 Introduction",
+            "text": "Pre-trained language models (PLMs), such as BERT (Devlin et al., 2018), BART\n(Lewis et al., 2020), GPT (Brown et al., 2020), and XLNet (Yang et al., 2019),\nhave advanced the state-of-the-art of various natural language processing (NLP)\ntechnologies and demonstrated an exceptional ability to store and utilize\nlinguistic, factual, and commonsense knowledge. Consequently, PLMs form the\nbackbone of many recent NLP applications and have been successfully employed as\nmodular components in the context of task-oriented dialogue (TOD), responsible\nfor sub-tasks including dialogue state tracking and response generation\n(Hosseini-Asl et al., 2020; Lee et al., 2021). Since they are exposed to large\nquantities of general data during training, PLMs store a wide variety of diverse\nand general knowledge in their parameters (Petroni et al., 2019) such as\ncapitals of nations, biographical details of famous individuals, and other facts\nof varying granularity. Commercially deployed TOD systems, however, typically\nrequire access to more restricted, domain-specific categories of knowledge in\norder to produce informative and factually accurate responses to user\nqueries.(The term domain here refers to a specific application use-case (e.g.\nexpedia.com (travel) and opentable.com (restaurant) represent different\ndomains).) Such information may include addresses of particular local\nattractions, detailed restaurant menus, train routes, or ticket prices, and is\nunlikely to be found in the PLM's training data. Due to its specialized nature,\nthis knowledge is often stored in external knowledge bases (KBs) that are\naccessed at run-time by TOD systems via external queries. This process\nintroduces additional complexity into the dialogue model design and requires\nimplementing KB queries and code wrappers as part of system setup, causing a\nsubstantial overhead especially for non-experts. Querying external KBs can also\nbe disadvantageous when the KB is small, or is not changing in real time (as is\nthe case with catalogs, restaurants' menus, etc). We identify the decoupling of\ndomain-specific knowledge from the dialogue model as a shortcoming to be\nremedied and instead propose to inject this knowledge directly into the model's\nparameters. This eliminates the need for querying external KBs, streamlining the\ncreation and deployment of TOD systems. Injecting domain-specific information\ninto TOD systems that can guide and inform model behavior and may be\nsubsequently updated and modified by the user is not a trivial task. Ideally,\nthis should be accomplished in a manner that is efficient,\narchitecture-agnostic, and compatible with off-the-shelf PLMs. In order to\nsatisfy these requirements, we adopt light-weight adapter networks as\nrepositories of domain-specific knowledge (KB-adapters for short). Such adapters\ncan be trained to memorize KB facts(We use the term fact to refer to individual\nKB entries.) and integrated into pretrained PLMs through the fusion of hidden\nrepresentations, as illustrated in Figure 1. Our work is in line with past\nstudies that demonstrated the utility of adapters as stores of factual and\nlinguistic knowledge outside of TOD (Wang et al., 2020). Importantly, injecting\nknowledge into TOD models through adapters is computationally less demanding\nthan injecting domain-specific facts by fine-tuning entire dialogue models on\nsynthetic data, as explored in (Madotto et al., 2020), which facilitates\nefficient updating of the injected knowledge. To quantify the success of the\nknowledge injection procedure, we develop the Knowledge Probing using Response\nSelection (KPRS) task and benchmark (see \u00a73). KPRS leverages contrastive\ndialogue response pairs to probe the extent of memorization of domain-specific\nfacts by the evaluated dialogue model, whereby one response is consistent with\nthe corresponding KB, while the other is not. To our knowledge, both KPRS and\nthe use of adapters for domain-specific knowledge injection in TOD represent\nnovel contributions of our work. We conduct experiments that evaluate PLMs\nequipped with domain-specific KB-adapters on the KPRS benchmark as well as the\nmore conventional response generation (RG) task, comparing them against strong\nbaselines. Our contributions can be summarized as follows:\n\n\u2022 We define and implement adapter-based methods for injecting highly specific\nand retrievable domain knowledge into TOD models\n\n\u2022 We design and develop the KPRS probing task that can be used to evaluate the\neffectiveness of knowledge injection for TOD systems\n\n\u2022 We show that PLMs with KB-adapters are usually preferable to knowledge-unaware\nand sequentially-finetuned PLMs for TOD"
+        },
+        {
+            "section_title": "2 KB-Adapters for Domain-Specific Knowledge Injection",
+            "text": "We conceptualize KB adapters as repositories of domain-specific information that\nguide the PLMs' predictions to be consistent with KB contents. The proposed\nknowledge injection process is divided into two stages: (1) Memorization:\nadapters are trained to memorize domain-specific KB facts; (2) Utilization: PLMs\nare trained to leverage adapters when reasoning about entities and their\nattributes. During the memorization stage, adapters are connected to the frozen\nPLM and tasked with reconstructing corrupted KB facts, thereby memorizing\nassociations between entity and attribute mentions. During the utilization\nstage, the PLM (now unfrozen) is given access to frozen adapters and learns to\nleverage their memorized knowledge to make more accurate predictions on\ndownstream tasks such as RG. As a result, PLMs can generalize to unseen inputs\nby virtue of their domain-general pretraining while receiving domain-specific\nguidance in their predictions by the knowledge encoded in adapter\nrepresentations. When training KB-adapters, we allocate a single adapter for\neach individual domain KB (e.g. hotel or restaurant). This results in shorter\ntraining times per adapter and (if needed) facilitates efficient re-training of\nadapters to reflect changes in the associated KBs.(E.g. if the user updates the\nprices of certain items on a restaurant's menu.) This allows for a\nstraightforward extension of TOD systems equipped with KB-adapters to new\ndomains, as this only requires training a single, new domain-specific adapter\nthat can be used in concert with existing ones. Nevertheless, we also consider a\nsetting where we train a single, mixed-domain adapter on the concatenation of\nall KBs in our experiments (see \u00a75.5)."
+        },
+        {
+            "section_title": "2.1 System Overview",
+            "text": "Unlike the vast amounts of data used to pretrain PLMs, information stored in KBs\nis usually structured and does not resemble natural language expressions. Figure\n2 shows a single KB entry (or fact) from the MultiWOZ 2.2 dataset (Budzianowski\net al., 2018; Ye et al., 2021). Since KB-adapters need to be compatible with\nPLMs and their internal representations, we therefore convert KB entries prior\nto the memorization stage from their initial format into declarative statements\nof varying complexity (\u00a72.2). Each statement mentions exactly one entity (e.g. a\nrestaurant's name) and one or more entity attributes (e.g. the types of cuisine\nserved by a restaurant). Each statement is subsequently corrupted by masking out\na single attribute.(The entity mention is never masked out, as multiple entities\ncan have the same attribute resulting in ambiguous model inputs, e.g. multiple\nrestaurants can serve Indian food.) By denoising the input sequence, adapters\nlearn to correlate entities with their attributes, effectively memorizing entire\nKBs with high accuracy (\u00a72.3). The obtained KB-adapters are utilized to guide\nPLMs' predictions during fine-tuning on downstream TOD tasks (\u00a72.4). In our\nexperiments, BART (Lewis et al., 2019) is chosen as the PLM that forms the\nbackbone of the adapter-augmented TOD model, due to its competitive performance\non generative tasks.(We utilize the BART-Large provided as part of the\nTransformers library (Wolf et al., 2019).) While the proposed knowledge\ninjection approach is agnostic to the choice of particular PLM, we leave such\nvalidation for future work. We employ bottleneck adapters (Houlsby et al.,\n\n2019) due to their established effectiveness and insert them after the final\nlayer of the encoder and decoder. The PLM's hidden state given to the adapter as\ninput is combined with the adapter's output using a weighted fusion function\nwhich is a linear transformation of the PLM's hidden state followed by a softmax\nactivation that produces the fusion weights. This allows the final model to\ndynamically adjust the extent to which adapter knowledge is used at each\nprediction step. In this work, we ran two sets of experiments by applying this\ngating function to either the logits obtained from both the PLM and the\nadapters, or to their pre-logit hidden states. We train a single encoder and a\nsingle decoder adapter per domain (hyper-parameter settings are reported in\nAppendix C).(We also investigated several other fusion functions, including\nunweighted state averaging, state concatenation followed by a projection as used\nin (Wang et al., 2020), attention, GRU cell, and a combination of softmax\ndistributions produced separately by the PLM and the adapter. However, neither\nof these performed better than the proposed approach.)"
+        },
+        {
+            "section_title": "2.2 From KB Facts to Declarative Statements",
+            "text": "Previous studies that investigated knowledge injection methods often use\nrelational tuples to represent individual facts contained within a KB, e.g.\nwhere an entity is connected to one of its attributes via the relevant relation:\n[Pizza Hut City Centre, food, Italian]. While this knowledge representation\nformat has been found to be effective in the past, our preliminary studies\nindicated that the mismatch between the natural language input format expected\nby a PLM and the structured tuple causes slight performance degradation. Hence,\nwe choose to represent individual KB entries as natural language statements that\nare fully consistent with the data seen by the PLM during pretraining. There are\nseveral intuitive ways in which a KB entries can be translated into natural\nlanguage statements. Referring again to Figure 2, we consider (1) atomic\nstatements, where each statement mentions the entity and one of its attributes,\nconnected by the attribute's relation, and (2) composite statements where each\nstatement communicates the entirety of the entry, covering all provided entity\nattributes and relations. Table 1 illustrates both formats based on the MultiWOZ\nKB entry in Figure 2. All statements are derived by filling-in pre-defined,\nhuman-authored templates with the appropriate entity and attribute values.(We\nnote that we did not optimize the templates' design as part of our\ninvestigation. Our goal in creating the templates was to render structured KB\ncontent into natural language without introducing any superfluous information,\nso as to verify the efficacy of our adapter-based knowledge injection method\nwithout additional confounding factors.) Designing the templates introduces\nminimal overhead, as they reuse attribute designations where possible and do not\nintroduce any information beyond the contents of KB entries. The exhaustive list\nof templates used in our experiments is provided in Tables 9 and 10. During the\nmemorization stage, KB-adapters are trained on a mixture of all atomic and\ncomposite facts, so as to familiarize the TOD model with different\nrepresentations of the same information."
+        },
+        {
+            "section_title": "2.3 Memorization Stage",
+            "text": "Following the construction of natural language representations of KB facts, the\nmemorization stage involves training adapters to memorize and recall KB\ninformation. As shown on the left in Figure 3, the adapter-augmented PLM learns\nto reconstruct masked declarative statements that are derived from KB contents,\nwhereby the weights of the PLM itself are kept frozen - only adapter parameters\nare being updated. By filling-in masked tokens, adapters learn correlations\nbetween entities (e.g. hotel names) and their attributes (e.g. phone numbers).\nAdapter training resembles masked language modeling and is easy to implement and\nscale."
+        },
+        {
+            "section_title": "2.4 Utilization Stage",
+            "text": "After the memorization stage, PLMs are trained to leverage the domain-specific\nknowledge encoded in adapter representations with the goal of producing more\naccurate predictions on a downstream task, such as RG, as illustrated on the\nright in Figure 3. Throughout this fine-tuning process, adapter parameters are\nkept frozen so as to preserve the domain-specific knowledge injected during the\nmemorization stage. PLM parameters, on the other hand, are unfrozen to allow the\nmodel to learn to exploit adapter representations.\n\n3 Knowledge-Probing using Response Selection (KPRS) Benchmark\n\nIn this study, we investigate the ability of language models to verify and\nretrieve domain-specific facts within the TOD setting. To this end, we propose\nthe \"Knowledge-Probing using Response Selection\" (KPRS) task and the associated\nbenchmark. KPRS allows us to examine whether domain-specific knowledge, such as\nentities and their attributes, that is stored within the parameters of the\nevaluated model can be successfully accessed and guide the model's predictions.\nBeing knowledgeable about domain-specific entities in this manner can benefit\ndialogue models when reasoning about and replying to user queries. We show this\nto be the case for the response generation task in \u00a75.3. KPRS is a contrastive\nevaluation benchmark that measures whether the probed model has memorized and\ncan accurately retrieve domain-specific knowledge contained within a specified\nKB. It is derived from MultiWOZ 2.2 dialogues (Zang et al., 2020) (development\nand test portions only) and covers four domains: restaurant, hotel, attraction,\nand train. Given a dialogue context, the task presented to the evaluated model\nis to score responses that are either compatible or incompatible with the\ninformation contained in the KB. Importantly, KPRS should not be regarded as a\nstand-alone evaluation task, but rather as a probing mechanism that can offer\ninformative insights into a model's ability to access domain-specific facts\nstored within its parameters, similar to other knowledge probes, e.g. (Petroni\net al., 2019). Specifically, a fact-aware model should be able to distinguish\nbetween an appropriate (\"reference\") dialogue response that is compatible with\nthe knowledge base information from an inappropriate (\"distractor\") response\nthat contradicts the domain-specific knowledge. By design, the two responses are\nminimally different - identical except for attribute values associated with\nentities described in the KB, such as restaurant names or departure times of\ntrains. Hence, to identify the correct dialogue response, a model must be able\nto distinguish values that are compatible with domain-specific information from\nthose that are not."
+        },
+        {
+            "section_title": "3.1 Benchmark Design",
+            "text": "In order to derive KPRS from MultiWOZ 2.2 development and test set dialogues, we\n(1) extract dialogue contexts that precede a system response that contains a\nmention of an entity from the KB or its attributes, and (2) perturb the\ncorresponding system response to make it incompatible with the KB by modifying\nsaid entity and attribute mentions. Different perturbation strategies are used\nfor different types of attribute slots. For phone numbers, a single digit is\nrandomly changed. For integers (e.g. denoting the price of a train ticket), we\nrandomly increment or decrement the numbers by a small amount. For other slot\ntypes, distractor values are chosen so that they differ from the reference value\nwhile producing inadmissible responses. Distractors are chosen adversarially,\ni.e., candidates are sampled from the KB until the perturbed response becomes\nincompatible with the domain-knowledge and the dialogue context up to the\nresponse, while also achieving a lower sentence-level perplexity than the\nreference response according to a filter-LM (BART-Large). The latter is to\nensure the well-formedness and plausibility of the perturbed responses. To\nguarantee that the perturbed response is indeed unsuitable, we make sure that\nthe selected distractor does not share attriutes that have been mentioned in the\ndialogue context with the replaced slot value.(E.g. if the response originally\nmentioned the name of a restaurant that serves Italian food and the dialogue\ncontext up to the response only mentions Italian cuisine as a desired restaurant\nproperty, the distractor is explicitly chosen, using string-matching heuristics,\nto be a restaurant that serves some other type of food, so as not to\nunintentionally yield a valid response.)\n\nFigure 4 shows examples included in the KPRS benchmark. Each KPRS sample\ncontains the dialogue context that includes reference dialogue states, and two\nresponse options - reference response and distractor response. Overall, the KPRS\nbenchmark dataset includes 3,055 samples (1,711 single-domain, 1,324\nmulti-domain). Samples had been derived from 831 unique dialogues / 1,997 unique\ndialogue contexts. On average, 3.65 samples were obtained from each individual\ndialogue / 1.52 samples from each individual dialogue context."
+        },
+        {
+            "section_title": "4 Experimental Setup",
+            "text": ""
+        },
+        {
+            "section_title": "4.1 Knowledge Base Resource",
+            "text": "Throughout our experiments, we use MultiWOZ 2.2 (Zang et al., 2020) which\ncontains several relatively small-scale domain-specific KBs that are aligned\nwith task-oriented dialogues.(In practical settings, businesses maintain similar\nknowledge bases in-house which could be utilized in TOD servicees.) After\nfiltering out KBs with missing information, we are left with four domains:\nrestaurant, hotel, attraction, and train. Table 2 shows the number of facts\navailable per domain. Note the substantial gap in the number of facts where\ntrains is approximately 25X to 66X larger than the other domains."
+        },
+        {
+            "section_title": "4.2 Intrinsic Evaluation",
+            "text": "To examine whether they can accurately retrieve the injected KB facts, we task\nknowledge-augmented PLMs with reconstructing masked facts, using inputs of the\nsame format as described in \u00a72.2. Since this task measures success as a model's\nability to memorize and recall learned KB information rather than generalize it\nto unseen inputs, we evaluate our models on the same set of data as was used for\nknowledge injection as part of the memorization stage. Memorization accuracy is\nemployed as the evaluation metric, representing the number of facts that have\nbeen correctly reconstructed. We refer to this task as fact memorization task."
+        },
+        {
+            "section_title": "4.3 Downstream Evaluation",
+            "text": "Additionally, we evaluate our models on the KPRS probe (\u00a73) as well as the\nresponse generation (RG) task. While KPRS directly estimates models' preference\nfor dialogue continuations that are either consistent or inconsistent with KB\ninformation, RG examines model's ability to integrate the injected KB knowledge\ninto the generated response as part of the TOD pipeline. For KPRS, we fine-tune\nBART-large on the training data for each domain, using correct responses as\ntargets, and evaluate subsequent model performance on the KPRS benchmark. An\naugmented PLM that can accurately access the injected domain-specific facts is\nexpected to assign a higher likelihood to the reference response, compared to\nthe permuted distractor. Response selection accuracy is used as the evaluation\nmetric, defined as (c/N), where N is the total number of contrastive sentence\npairs and c is the number of pairs in which the reference response (i.e. the one\nconsistent with the KB) is assigned lower perplexity by the model. For RG, given\na dialogue context, models must generate a response that is consistent with KB\nfacts without performing external KB queries. To test the model's ability for\nfact retrieval, we use unweighted mean of two informative metrics: inform rate\n(n/N) and success rate (m/N) (Zang et al., 2020), where N is the total number of\nturns in the test set, n is the number of turns in which the entities generated\nby the model are all consistent with the KB, and m is the number of turns in\nwhich the model generation provides at least as much of the user-requested\ninformation as the gold response.(BLEU (Papineni et al., 2002), as typically\nused for text generation, is not sufficient as an evaluation metric for our\npurpose. Previous work evaluated generated responses that contain slot value\nplaceholders instead of concrete information such as entity attributes, as in\nthe case in our study. In addition, any evaluation of response factuality must\nconsider all permissible entities given the dialogue context, rather than only\none out of many, as is implicitly done by BLEU.)"
+        },
+        {
+            "section_title": "4.4 Baselines",
+            "text": "We compare the performance of the knowledge-injected model with two baselines:\n(1) BART-large without any knowledge augmentation; (2) BART-large that has been\nsequentially fine-tuned on each KB (Seq-BART). We fine-tune all models on the\ndownstream task prior to the downstream evaluation."
+        },
+        {
+            "section_title": "5 Results & Analysis",
+            "text": "We examine the models' ability to memorize and retrieve facts learned from the\nknowledge base in \u00a75.1 and the impact of knowledge injection on downstream tasks\nin \u00a75.2 and \u00a75.3. Models were evaluated in the single-domain setting where only\none single adapter corresponding to the specified domain was active at\nevaluation time with test samples belonging exclusively to the adapter domain (a\nmulti-domain setting is discussed in \u00a75.5)"
+        },
+        {
+            "section_title": "5.1 Fact Memorization",
+            "text": "As discussed in \u00a74.2, we evaluate whether the knowledge-augmented model is able\nto successfully denoise masked facts seen during training, thus testing its\nmemorization capabilities. Table 3 shows the results of the fact memorization\ntask for BART equipped with KB-adapters. The memorization accuracy is generally\nvery high across all domains and appears to correlate with KB size.\n\n5.2 Knowledge-Probing using Response Selection (KPRS)\n\nTable 4 reports the performance of the knowledge-augmented PLM compared to\nbaselines introduced in \u00a74.4. We found that injecting domain-specific knowledge\ninto the PLM significantly improves KPRS accuracy - by 9-15% - compared to BART.\nThe largest improvement can be observed in the train domain, which is at odds\nwith the fact memorization results (\u00a75.1), where our model under-performed on\nthat domain. As such, while perfect memorization of a of all facts contained\nwithin a large KBs remains a challenge in the current training setup, the domain\nknowledge embedded within the adapter network can nevertheless be effectively\nexploited by the PLM."
+        },
+        {
+            "section_title": "5.3 Response Generation (RG)",
+            "text": "Presumably, having access to the domain knowledge stored in KB-adapters should\nenable a PLM to generate responses that are more consistent with the respective\nKBs. Table 5 reports the results for our RG experiments, providing empirical\nsupport for this hypothesis. Interestingly, a large discrepancy can be observed\nfor the hotel domain between the two examined representation fusion techniques\n(ada-logit that combines PLM and adapter representations at the logit level vs.\nada-hidden that combines their pre-logits hidden states). We hypothesise that\nthis is, at least in part, due to the hotel KB containing a small number of\nfacts, which may have caused instability during training. Accordingly, although\nknowledge injection can clearly benefit generation of factual system responses\nin both the single-domain setting, the extent of the improvements is contingent\non the target domain and its properties, as is the best-performing\nrepresentation combination function.(It would be valuable to investigate the\ngeneral impact of KBs' size on the PLMs' performance. However, this falls\noutside the scope of this paper, as such study would require a greater diversity\nin the sizes of available KBs.)\n\nTable 6 provides estimates of RG quality according to BLEU. Overall, we see\nminor to substantial improvements with respect to the BLEU metric over the\nbaseline lacking KB-adapters. This can be taken as further evidence in support\nof the effectiveness of the proposed knowledge injection methodology. However,\nit should be noted that the extent of the observed improvements varies across\ndomains and representation combination functions."
+        },
+        {
+            "section_title": "5.4 Randomly-initialized Adapters",
+            "text": "We investigate how equipping PLMs with our proposed KB-adapters compares to\nequipping them with randomly-initialized adapters during the fine-tuning stage\n(a setting to which we refer as randBART). This effectively isolates the impact\nof knowledge injection on the KPRS and RG performance, by factoring out the\nincreased model capacity due to the additional parameters introduced by the\nadapters. Table 7 shows the experimental results for both tasks. We find that\ninjecting domain-specific knowledge into the PLM does indeed significantly\nimprove KPRS performance - by 6-15% - compared with rand-BART, thus further\nvalidating our approach."
+        },
+        {
+            "section_title": "5.5 Integration of Multiple Knowledge Bases",
+            "text": "The modular nature of of the proposed knowledge-injection method allows us to\nequip PLMs with multiple adapters, with each adapter encoding information from a\ndifferent domain. This enables the augmented PLM to access facts from different\ndomains simultaneously, without running the risk of catastrophic forgetting,\nwhereby information from one domain overwrites previously acquired\ndomain-specific knowledge, e.g. as a result of sequential fine-tuning. Aligned\nwith our motivation to allow users to easily add and modify KBs in practical\nsettings, we investigate whether our proposed system can effectively integrate\ninformation from multiple adapters. We utilize the same representation\ncombination functions as described in \u00a72.1, generalizing them to an unbound\nnumber of adapters by computing normalized fusion weights for each adapter and\nthe PLM itself. In this multi-domain setting, multiple adapters are active\nsimultaneously, while test samples are drawn from all four studied domains.\n\nTables 4 and 5 report multi-domain results for KPRS and RG in the multi column.\nFor both tasks, we observe clear improvements compared to baseline models when\nproviding the model with access to all domain-specific adapters simultaneously.\nHowever, we note that the gap between the adapter-augmented PLM and the\nbest-performing baseline is much smaller compared to single-domain experiments\nwhere the model only has access to a single, relevant adapter (1.9% vs. 12.25%\non average for KPRS and 8.1% vs. 11.6% on average for RG).\n\nOne reason for the limited improvements observed in the multi-domain setting\ncould be the PLM's inability to correctly identify adapters corresponding to the\ndialogues' domains and to promote their representations. The more pronounced\ngains observed in the single-domain setting - where the model does not have to\nchose between multiple adapters - appears to support this interpretation. To\nverify our hypothesis, we preclude the need for adapter selection by instead\ntraining a single adapter on the concatenation of facts from all four domains,\nwhich preserves the multi-domain setting. Evaluating the performance of the\nresultant model on KPRS, we observe improvements over the multiple adapters\nsetting, with ada-logis obtaining an accuracy of 83.0% and ada-hidden reaching\n85.9%, thus improving over the best-performing baseline by a substantial 9.4%.\nThis, however, comes at the expense of increased training time during the\nmemorization stage and a significant reduction in flexibility for the addition\nof new KBs (which will require costly re-training the single, multi-domain\nadapter rather than simply introducing a new single-domain adapter). It may be\npossible to improve the performance of PLMs equipped with multiple single-domain\nadapters by implementing more expressive combination representation functions or\nby adjusting the training regime. We regard as a promising research direction\nthat could more effectively extend the flexibility of adapter-based knowledge\ninjection to more complex dialogue settings."
+        },
+        {
+            "section_title": "6 Related Work",
+            "text": ""
+        },
+        {
+            "section_title": "6.1 Knowledge Injection",
+            "text": "Our work contributes to the growing body of research that explores strategies\nfor introducing external knowledge into the internal reasoning processes of\nPLMs, with the aim of aligning their predictions with respective knowledge\nsources (ColonHernandez et al., 2021). Previous work in this area incorporated\nlinguistic (Lauscher et al., 2019; Wang et al., 2020), factual (Wang et al.,\n2020; Agarwal et al., 2020), and commonsense (Lauscher et al., 2020) knowledge\ninto pretrained models, with studies differing in the exact format of the\ninjected knowledge and potential modifications to the PLMs' architecture.\nNevertheless, injection of highly specific, fine-grained, tabular information\ncommonly associated with TOD (as exemplified by MultiWOZ 2.2 KBs) has so far\nreceived limited attention, both within dialogue literature and beyond. The use\nof natural language statements as the primary mechanism for injecting external\ninformation into PLMs has been previously considered in works such as (Lu et\nal., 2021), who trained a generative model to transform knowledge triplets into\ndeclarative statements. We rely on template-based generation, instead, to\naccount for the relatively small size of our KBs, the highly structured nature\nof KB entries, and the lack of natural language sequences that can be trivially\naligned with KB contents."
+        },
+        {
+            "section_title": "6.2 Knowledge-Grounded Dialogue",
+            "text": "Of particular relevance to our work is the study by (Madotto et al., 2020) who\nfine-tune all parameters of a PLM on synthetic dialogues constructed so as to\ncommunicate all information contained within a TOD KB. The limitations of their\napproach, as noted by its authors, are that the synthetic dialogues are noisy\nand any subsequent updates to the injected KB information require finetuning the\nentire model anew which is computationally demanding. We address both issues by\nrelying on grammatically sound templates during knowledge injection and by\nleveraging light-weight adapters that can be updated for a small fraction of\ncost incurred by updating the full PLM. The Adapter-Bot introduced in (Lin et\nal., 2021) is likewise related to our models in that it employs adapters in the\ncontext of TOD. However, rather than training adapters to memorize KB content\nthat can be exploited by the dialogue model without additional supervision, the\nauthors rely on knowledge-aligned dialogues to introduce domain-specific\ninformation into their model which may not always be available. More recently,\n(Fan et al., 2021) proposed equipping transformer models with specialized\nmodules that fetch embedded information from external resources, integrating it\ninto the model's reasoning process. While the authors apply their model to\ndialogue generation, their work differs substantially from ours, as they do not\nconsider the task-oriented setting or structured KBs (instead using training set\nutterances and Wikipedia excerpts). However, combining knowledge memorization\nand differential information retrieval is a promising direction for future\nresearch. Moreover, external knowledge has found application in dialogue\nliterature outside of directly guiding response generation. For instance,\n(Lertvittayakumjorn et al., 2021) annotated dialogue data with constraint\nviolations based on valid links between entities as specified in the\ncorresponding KBs. Similar to KPRS, detection of constraint violations can be\nregarded as a probing task that provides insights about the ability of a\ndialogue model to reason about KB entities."
+        },
+        {
+            "section_title": "7 Limitations",
+            "text": "One of the main limitations of the presented approach is its reliance on\nmanually constructed fact templates. We experimented with fine-tuning\nKG-adapters directly on < ent1, rel, ent2 > KB triples, but found that the use\nof templates improves the ability of models to apply the memorized knowledge in\ndownstream applications. In light of this, possible future extensions of our\nwork may include creation of domain-agnostic strategies for knowledge injection\nthat do not necessitate manual design of templates for each new domain. Another\nlimitation comes from the fact that the proposed approach is suitable only for\nstatic and pseudo-dynamic KBs , i.e. that can change periodically, such as a\nseasonal menu or a database of cars manufactured by a company. However, it is\nnot suited for real-time databases (e.g. databases that store the availability\nof rooms in a hotel) since for every KB change the corresponding adapter needs\nto be retrained in order to be updated. Additionally, while injecting knowledge\ninto the language model has been shown to be effective for making it available\nduring fine-tuning on downstream tasks, the knowledge stored in the adapters'\nparameters might not be accurate enough for certain real world applications due\nto the imperfect fact memorization we observed in our experiments. Finally, the\nintroduced KPRS task only evaluates the extent to which a model can access\nfactual information stored in its parameters. It does not not assess the model's\nability to understand and use this knowledge for complex reasoning tasks, e.g.\ncounting the number of cars in a specific price range, or listing the items on a\nmenu that do not contain a certain ingredient. This could be an exciting\ndirection for future research."
+        },
+        {
+            "section_title": "8 Discussion and Conclusion",
+            "text": "In this study, we proposed a method for tightly integrating external knowledge\nwith the internal representations of PLMs by storing domain-specific information\nwithin light-weight adapter networks that guide model predictions. Such adapters\ncan memorize KB contents with high accuracy, which decreases slightly for larger\nKBs. An important contribution of our work is the KPRS probe designed to measure\nthe ability of TOD models to reason about KB entities and their attributes. As\npart of our experiments, we showed that KB-adapters clearly benefit the\nidentification and generation of TOD responses that are consistent with dialogue\nhistory and relevant KB entries, and showcased the advantages of using adapters\nfor knowledge injection as opposed to sequential fine-tuning. Our investigation\ndemonstrates that dialogue models can access domain-specific knowledge without\nhaving to query external KBs. This is an important finding as it can pave the\nway towards reducing the query engineering overhead in chatbot design, thus\nlowering the entry barrier for developing and deploying real-world TOD systems."
+        }
+    ],
+    "addenda": [
+        {
+            "section_title": "B Ethical Considerations",
+            "text": "Injection of external knowledge into dialogue models may have both ethical and\nlegal implication, if said knowledge contains personal identifiable information\n(PII), such as social security numbers of addresses of private individuals. Such\ninformation would be memorized by the adapter-augmented model and potentially\nexposed during response generation, if there are no additional safeguards in\nplace to prevent this scenario. For this reason, it is crucial to curate the\nmemorized KBs by removing any and all instances of PII prior to the memorization\nstage."
+        },
+        {
+            "section_title": "C Hyper-parameters",
+            "text": "All models were trained on V100 GPUs, using the PyTorch implementation of the\nBART-Large model distributed as part of the HuggingFace Transformers library\n(Wolf et al., 2019). The training loop employed the AdamW (Loshchilov and\nHutter, 2017) optimizer. By conducting a grid search, we empirically determined\nthat a learning rate (LR) of 3e^{\u22125} worked best for fine-tuning RG models and\nLR of 1e^{\u22126} yielded best results for KPRS. For knowledge injection, LR of\n3e^{\u22125} was found to be effective. In all cases, LRs were kept constant across\nall domains. For all domains and experiments, we re-use the same bottleneck\nadapter configuration, by setting the size of the hidden layer to 769. All\nmodels were trained until convergence by terminating training after 10 epochs\nduring which no improvement had been observed on the development set."
+        },
+        {
+            "section_title": "D Fact Templates",
+            "text": "This section provides a complete, exhaustive list of all templates used in the\ngeneration of declarative statements derived from the MultiWOZ 2.2 KB facts."
+        }
+    ],
+    "abstract": "Pre-trained language models (PLM) have advanced the state-of-the-art across NLP\napplications, but lack domain-specific knowledge that does not naturally occur\nin pretraining data. Previous studies augmented PLMs with symbolic knowledge for\ndifferent downstream NLP tasks. However, knowledge bases (KBs) utilized in these\nstudies are usually large-scale and static, in contrast to small,\ndomain-specific, and modifiable knowledge bases that are prominent in real-world\ntask-oriented dialogue (TOD) systems. In this paper, we showcase the advantages\nof injecting domain-specific knowledge prior to fine-tuning on TOD tasks. To\nthis end, we utilize light-weight adapters that can be easily integrated with\nPLMs and serve as a repository for facts learned from different KBs. To measure\nthe efficacy of proposed knowledge injection methods, we introduce Knowledge\nProbing using Response Selection (KPRS) - a probe designed specifically for TOD\nmodels. Experiments(https://github.com/amazon-research/\ndomain-knowledge-injection) on KPRS and the response generation task show\nimprovements of knowledge injection with adapters over strong baselines.",
+    "references": "Oshin Agarwal, Heming Ge, Siamak Shakeri, and Rami Al-Rfou. 2020. Knowledge\ngraph based synthetic corpus generation for knowledge-enhanced language model\npre-training. arXiv preprint arXiv:2010.12688.\n\nTom B Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla\nDhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al.\n2020. Language models are few-shot learners. arXiv preprint arXiv:2005.14165.\n\nPawe\u0142 Budzianowski, Tsung-Hsien Wen, Bo-Hsiang Tseng, Inigo Casanueva, Stefan\nUltes, Osman Ramadan, and Milica Ga\u0161i\u00b4c. 2018. Multiwoz-a large-scale\nmulti-domain wizard-of-oz dataset for task-oriented dialogue modelling. arXiv\npreprint arXiv:1810.00278.\n\nPedro Colon-Hernandez, Catherine Havasi, Jason Alonso, Matthew Huggins, and\nCynthia Breazeal. 2021. Combining pre-trained language models and structured\nknowledge. arXiv preprint arXiv:2101.12294.\n\nJacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018. Bert:\nPre-training of deep bidirectional transformers for language understanding.\narXiv preprint arXiv:1810.04805.\n\nAngela Fan, Claire Gardent, Chlo\u00e9 Braud, and Antoine Bordes. 2021. Augmenting\ntransformers with knn-based composite memory for dialog. Transactions of the\nAssociation for Computational Linguistics, 9:82-99.\n\nEhsan Hosseini-Asl, Bryan McCann, Chien-Sheng Wu, Semih Yavuz, and Richard\nSocher. 2020. A simple language model for task-oriented dialogue. arXiv preprint\narXiv:2005.00796.\n\nNeil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin De\nLaroussilhe, Andrea Gesmundo, Mona Attariyan, and Sylvain Gelly. 2019.\nParameter-efficient transfer learning for nlp. In International Conference on\nMachine Learning, pages 2790-2799. PMLR.\n\nAnne Lauscher, Olga Majewska, Leonardo FR Ribeiro, Iryna Gurevych, Nikolai\nRozanov, and Goran Glava\u0161. 2020. Common sense or world knowledge? investigating\nadapter-based knowledge injection into pretrained transformers. arXiv preprint\narXiv:2005.11787.\n\nAnne Lauscher, Ivan Vulic, E. Ponti, Anna Korhonen, and Goran Glavas. 2019.\nInforming unsupervised pretraining with external linguistic knowledge. ArXiv,\nabs/1909.02339.\n\nChia-Hsuan Lee, Hao Cheng, and Mari Ostendorf. 2021. Dialogue state tracking\nwith a language model using schema-driven prompting. arXiv preprint\narXiv:2109.07506.\n\nPiyawat Lertvittayakumjorn, Daniele Bonadiman, and Saab Mansour. 2021.\nKnowledge-driven slot constraints for goal-oriented dialogue systems. In\nProceedings of the 2021 Conference of the North American Chapter of the\nAssociation for Computational Linguistics: Human Language Technologies, pages\n3407-3419.\n\nMike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed,\nOmer Levy, Ves Stoyanov, and Luke Zettlemoyer. 2019. Bart: Denoising\nsequence-to-sequence pre-training for natural language generation, translation,\nand comprehension. arXiv preprint arXiv:1910.13461.\n\nMike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed,\nOmer Levy, Veselin Stoyanov, and Luke Zettlemoyer. 2020. BART: Denoising\nsequence-to-sequence pretraining for natural language generation, translation,\nand comprehension. In Proceedings of the 58th Annual Meeting of the Association\nfor Computational Linguistics, pages 7871-7880, Online. Association for\nComputational Linguistics.\n\nZhaojiang Lin, Andrea Madotto, Yejin Bang, and Pascale Fung. 2021. The\nadapter-bot: All-in-one controllable conversational model. In Proceedings of the\nAAAI Conference on Artificial Intelligence, volume 35, pages 16081-16083.\n\nIlya Loshchilov and Frank Hutter. 2017. Decoupled weight decay regularization.\narXiv preprint arXiv:1711.05101.\n\nYinquan Lu, Haonan Lu, Guirong Fu, and Qun Liu. 2021. Kelm: Knowledge enhanced\npretrained language representations with message passing on hierarchical\nrelational graphs. arXiv preprint arXiv:2109.04223.\n\nAndrea Madotto, Samuel Cahyawijaya, Genta Indra Winata, Yan Xu, Zihan Liu,\nZhaojiang Lin, and Pascale Fung. 2020. Learning knowledge bases with parameters\nfor task-oriented dialogue systems. arXiv preprint arXiv:2009.13656.\n\nKishore Papineni, Salim Roukos, Todd Ward, and WeiJing Zhu. 2002. Bleu: a method\nfor automatic evaluation of machine translation. In Proceedings of the 40th\nannual meeting of the Association for Computational Linguistics, pages 311-318.\n\nFabio Petroni, Tim Rockt\u00e4schel, Patrick Lewis, Anton Bakhtin, Yuxiang Wu,\nAlexander H Miller, and Sebastian Riedel. 2019. Language models as knowledge\nbases? arXiv preprint arXiv:1909.01066.\n\nRuize Wang, Duyu Tang, Nan Duan, Zhongyu Wei, Xuanjing Huang, Guihong Cao, Daxin\nJiang, Ming\n\nZhou, et al. 2020. K-adapter: Infusing knowledge into pre-trained models with\nadapters. arXiv preprint arXiv:2002.01808.\n\nThomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue,\nAnthony Moi, Pierric Cistac, Tim Rault, R\u00e9mi Louf, Morgan Funtowicz, et al.\n2019. Huggingface's transformers: State-of-the-art natural language processing.\narXiv preprint arXiv:1910.03771.\n\nZhilin Yang, Zihang Dai, Yiming Yang, Jaime Carbonell, Russ R Salakhutdinov, and\nQuoc V Le. 2019. Xlnet: Generalized autoregressive pretraining for language\nunderstanding. Advances in neural information processing systems, 32.\n\nFanghua Ye, Jarana Manotumruksa, and Emine Yilmaz. 2021. Multiwoz 2.4: A\nmulti-domain task-oriented dialogue dataset with essential annotation\ncorrections to improve state tracking evaluation. arXiv preprint\narXiv:2104.00773.\n\nXiaoxue Zang, Abhinav Rastogi, Srinivas Sunkara, Raghav Gupta, Jianguo Zhang,\nand Jindong Chen. 2020. Multiwoz 2.2: A dialogue dataset with additional\nannotation corrections and state tracking baselines. arXiv preprint\narXiv:2007.12720.",
+    "images": {
+        "Figure_1_block_9_35f5c41e": {
+            "source_page_num": 0,
+            "caption": "Figure 1: A high-level representation of the KB-adapter architecture (decoder\nonly, for clarity). Adapter states are fused with the hidden states of the PLM\nto produce a knowledge-informed predictive distribution. Dashed elements are\nused only if multiple adapters are active.",
+            "box": [
+                301.1419982910156,
+                202.6888885498047,
+                531.1559448242188,
+                402.3706359863281
+            ],
+            "adjacent_neighbor": 2,
+            "image_file": "images/Figure_1_block_9_35f5c41e.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/a393309f1af2ec910d47b5b6f3e4f1b0.png"
+        },
+        "Figure_2_block_1_83d3d643": {
+            "source_page_num": 2,
+            "caption": "Figure 2: Example MultiWOZ 2.2 KB entry.",
+            "box": [
+                76.77999877929688,
+                40,
+                283.21820068359375,
+                228.79861450195312
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Figure_2_block_1_83d3d643.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/5e72c80780a9411f5511b5185e13b4b5.png"
+        },
+        "Table_1_block_10_ab048942": {
+            "source_page_num": 2,
+            "caption": "Table 1: Examples of the natural language formats used to represent KB facts in\nour study. Entity mentions are underlined, whereas entity attributes are\nitalicized.",
+            "box": [
+                298.41175079345703,
+                72.86186218261719,
+                526.3175048828125,
+                216.65164184570312
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_1_block_10_ab048942.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/30112a3bd7a02c98a5c967bc41eb8601.png"
+        },
+        "Figure_3_block_2_f6b8fad7": {
+            "source_page_num": 3,
+            "caption": "Figure 3: On the left, a schematic representation of the memorization stage,\nwhere the adapter is trained to memorize KB contents by reconstructing corrupted\nstatements derived from KB facts. On the right, a representation of the\nutilization stage, where the adapter-augmented PLM is fine-tuned on a downstream\nTOD task and learns how to utilize adapter knowledge.",
+            "box": [
+                65.8659896850586,
+                40,
+                295.78790283203125,
+                178.34725952148438
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Figure_3_block_2_f6b8fad7.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/e968882714fc818dff75118937cefc31.png"
+        },
+        "Figure_4_block_8_103ba006": {
+            "source_page_num": 3,
+            "caption": "Figure 4: Samples from the KPRS benchmark. Each sample consists of (1) a\ndialogue context that includes the available history and the active user turn\nand (2) two candidate responses to be scored by the model - a reference response\nthat is consistent with both the dialogue context and the KB, and a perturbed\nresponse that is not. Reference values are set in green and perturbed values are\nset in red. Note that \"Tenpin\" is not in the centre area and \"Alexander Bed and\nBreakfast\" does not have free WiFi according to their respective KB entries.",
+            "box": [
+                301.1419982910156,
+                40,
+                531.0662841796875,
+                276.1526184082031
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Figure_4_block_8_103ba006.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/0b0317e4774ec01acc19e861c6cad724.png"
+        },
+        "Table_2_block_1_3ce10845": {
+            "source_page_num": 5,
+            "caption": "Table 2: Number of facts in each KB.",
+            "box": [
+                70.4729995727539,
+                71.9300537109375,
+                298.3491096496582,
+                104.17361450195312
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_2_block_1_3ce10845.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/057a195a460b5cb0dd46a68098aa6d3a.png"
+        },
+        "Table_3_block_8_7c95fde9": {
+            "source_page_num": 5,
+            "caption": "Table 3: Fact memorization accuracy for KB-adapters.",
+            "box": [
+                298.3491096496582,
+                71.9300537109375,
+                526.2252197265625,
+                104.17361450195312
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_3_block_8_7c95fde9.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/1ac365e2bbbc14cf079e6fa4d945a8c8.png"
+        },
+        "Table_4_block_3_48716848": {
+            "source_page_num": 6,
+            "caption": "Table 4: Response selection accuracy on KPRS. ada-logits and ada-hidden refer to\nexperiments utilizing KB-adapters with different fusion mechanisms (either at\nthe level of logits or pre-logits hidden states).",
+            "box": [
+                70.50599670410156,
+                71.53204345703125,
+                298.38455963134766,
+                137.22824096679688
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_4_block_3_48716848.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/bfbf830f515f0eeca55b8a393795f3b5.png"
+        },
+        "Table_5_block_12_91a1225b": {
+            "source_page_num": 6,
+            "caption": "Table 5: RG performance calculated as the average of inform rate and success\nrate metrics. The all column reports results for the multi-domain setting.",
+            "box": [
+                298.38455963134766,
+                71.53204345703125,
+                526.2631225585938,
+                126.38961791992188
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_5_block_12_91a1225b.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/a4a244004cdbd9eda0dd4dce7db46ab9.png"
+        },
+        "Table_6_block_16_822da11e": {
+            "source_page_num": 6,
+            "caption": "Table 6: Response generation BLEU score performance.",
+            "box": [
+                298.38455963134766,
+                179.008056640625,
+                526.2631225585938,
+                233.86563110351562
+            ],
+            "adjacent_neighbor": 12,
+            "image_file": "images/Table_6_block_16_822da11e.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/f884c2d6bccefc371d24db03aaf6134e.png"
+        },
+        "Table_7_block_7_bfd7c0b1": {
+            "source_page_num": 7,
+            "caption": "Table 7: Response selection accuracy on KPRS and the average of inform and\nsuccess rate metrics for RG. For RG in the the restaurant domain, rand-BART\nfailed to converge given our hyper-parameter settings.",
+            "box": [
+                70.4729995727539,
+                71.53204345703125,
+                298.3491096496582,
+                182.52963256835938
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_7_block_7_bfd7c0b1.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/eee1f2573e1c90e46be64992ac0e0ae1.png"
+        },
+        "Table_8_block_4_4ee509e1": {
+            "source_page_num": 11,
+            "caption": "Table 8: Memorization accuracy when training adapters on different formats of\ndeclarative statements. both denotes the combination of atomic and compositional\nstatements. Scores set in bold are the highest in their respective column.",
+            "box": [
+                70.35299682617188,
+                73.00334167480469,
+                298.33433532714844,
+                415.920654296875
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_8_block_4_4ee509e1.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/0b6c9cdf45a35afa5b9a0aadf34a0506.png"
+        },
+        "Table_9_block_9_aec2cf09": {
+            "source_page_num": 12,
+            "caption": "Table 9: An exhaustive list of human-authored templates used to generate atomic\nstatements for use in the memorization stage. Note that each domain is allocated\nexactly one template per entity attribute. Also note that the mask in does{}have\nallows for negation in cases where the attribute is negative (e.g. if a hotel\ndoes not have free WiFi).",
+            "box": [
+                70.55699920654297,
+                114.5540771484375,
+                526.18017578125,
+                453.8446350097656
+            ],
+            "adjacent_neighbor": null,
+            "image_file": "images/Table_9_block_9_aec2cf09.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/0d46970f736c7b9fbae8ee263a7b61f3.png"
+        },
+        "Table_10_block_15_16d799a8": {
+            "source_page_num": 12,
+            "caption": "Table 10: An exhaustive list of human-authored templates used to generate\ncomposite statements for use in the memorization stage.",
+            "box": [
+                70.55699920654297,
+                589.6390380859375,
+                526.18017578125,
+                699.8396606445312
+            ],
+            "adjacent_neighbor": 9,
+            "image_file": "images/Table_10_block_15_16d799a8.png",
+            "image_url": "https://d3f0003gnwhznr.cloudfront.net/37dca1324361fa137037322143bbcba2.png"
+        }
+    }
+}

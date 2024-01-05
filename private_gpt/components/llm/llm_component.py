@@ -18,10 +18,6 @@ from llama_index.llms import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-HF_TOKEN: Optional[str] = os.getenv("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")
-
-
-
 @singleton
 class LLMComponent:
     llm: LLM
@@ -88,6 +84,11 @@ class LLMComponent:
                     api_version="",
                 )
             case "huggingface":  
+                #FIXME: clean up and abstract this so that messages_to_prompt comes from something like the following
+                """
+                    prompt_style = get_prompt_style(settings.local.prompt_style)
+                    messages_to_prompt=prompt_style.messages_to_prompt
+                """
                 hf = HuggingFaceTextGenInference(
                     inference_server_url="https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta",
                     max_new_tokens=512,
@@ -99,12 +100,11 @@ class LLMComponent:
                 )
 
                 def messages_to_prompt(messages: list[ChatMessage]) -> str:
-                    print("i'm in here")
-
                     tokenizer = AutoTokenizer.from_pretrained("HuggingFaceH4/zephyr-7b-beta")
                     formated_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                     print(formated_prompt)
                     return formated_prompt
+                
                 self.llm = LangChainLLM(llm=hf, messages_to_prompt=messages_to_prompt)
                 # , messages_to_prompt=messages_to_prompt
                 # self.llm = MockLLM()
