@@ -61,4 +61,4 @@ setup:
 	poetry run python scripts/setup
 
 populate-data:
-	poetry run python scripts/populate_data.py
+	poetry run python scripts/populate_data.py $(call args,json)
